@@ -40,6 +40,22 @@ class Paper(db.Model):
             "tags": self.tags.split(',') if self.tags else [],
             "file_path": self.file_path
         }
+        
+class Note(db.Model):
+    __tablename__ = 'notes'
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(255), nullable=False, default='')
+    content = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'title': self.title,
+            'content': self.content,
+            'created_at': self.created_at.isoformat()
+        }
 
 # -------------------------- 元数据提取（纯 Python 实现） --------------------------
 

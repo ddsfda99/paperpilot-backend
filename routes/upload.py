@@ -44,6 +44,8 @@ def upload_pdf():
     title = metadata.get('title', 'Untitled')
     author = metadata.get('author', 'Unknown')
     tags = metadata.get('keywords', '')
+    logging.info(f"🧠 提取到关键词 tags: {tags}")
+
     abstract = metadata.get('abstract', '')
 
     # ✅ 提取参考文献
@@ -61,9 +63,10 @@ def upload_pdf():
             'msg': '论文已存在，未重复上传',
             'url': f'http://localhost:5000{existing.file_path}',
             'file_id': os.path.basename(existing.file_path),
-            'references': references
+            'references': references,
+            'keyword': tags,
+            'abstract': abstract
         }), 200
-
     # 存入数据库
     paper = Paper(
         title=title,
@@ -76,8 +79,10 @@ def upload_pdf():
     db.session.commit()
 
     return jsonify({
-        'msg': '上传成功 ✅',
+        'msg': '上传成功',
         'url': f'http://localhost:5000/static/uploads/{filename}',
         'file_id': filename,
-        'references': references  # ✅ 返回给前端
+        'references': references, 
+        'keyword': tags,          
+        'abstract': abstract      
     }), 200

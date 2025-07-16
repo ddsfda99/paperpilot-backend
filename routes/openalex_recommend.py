@@ -13,7 +13,7 @@ def recommend_papers():
     query = keyword or text
     if not query:
         return jsonify({'error': '缺少关键词或摘要'}), 400
-
+    print("🔍 实际搜索关键词:", query)
     url = "https://api.openalex.org/works"
     params = {
         "search": query,
@@ -35,7 +35,7 @@ def recommend_papers():
             title = r.get("title", "无标题")
             authors = [a.get("author", {}).get("display_name", "未知作者") for a in r.get("authorships", [])]
 
-            # 抽取摘要（倒排索引恢复）
+            # 抽取摘要
             abstract_obj = r.get("abstract_inverted_index")
             abstract_text = ""
             if abstract_obj:

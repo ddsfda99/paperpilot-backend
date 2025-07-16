@@ -1,5 +1,18 @@
 import fitz  # PyMuPDF
 from pathlib import Path
+from keybert import KeyBERT
+from sentence_transformers import SentenceTransformer
+kw_model = KeyBERT(SentenceTransformer('all-MiniLM-L6-v2'))
+
+def extract_keywords_with_keybert(text: str, top_k=5) -> str:
+    """使用 KeyBERT 从文本中提取关键词（轻量语义模型）"""
+    keywords = kw_model.extract_keywords(
+        text,
+        keyphrase_ngram_range=(1, 2),
+        stop_words='english',
+        top_n=top_k
+    )
+    return ", ".join([kw[0] for kw in keywords])
 
 
 def extract_metadata(pdf_path: str) -> dict:
@@ -48,26 +61,17 @@ def extract_metadata(pdf_path: str) -> dict:
             if abstract:
                 break
 
+    # 如果 keywords 缺失，则用 KeyBERT 从 abstract 中提取
+    if not keywords:
+        try:
+            keywords = extract_keywords_with_keybert(abstract)
+        except Exception as e:
+            print(f"⚠️ KeyBERT 提取关键词失败: {e}")
+            keywords = ""
+    print("keywords:", keywords)
     return {
         "title": title,
         "author": author,
         "keywords": keywords,
         "abstract": abstract
     }
-
-
-# CLI entry
-if __name__ == "__main__":
-    import sys
-    import json
-
-    if len(sys.argv) != 2:
-        print("❌ 用法：python extract_metadata.py <PDF路径>")
-        sys.exit(1)
-
-    pdf_file = sys.argv[1]
-    try:
-        metadata = extract_metadata(pdf_file)
-        print(json.dumps(metadata, indent=2, ensure_ascii=False))
-    except Exception as e:
-        print(f"❌ 提取失败: {e}")

@@ -7,6 +7,7 @@ from .answer import answer_bp
 from .openalex_search import openalex_bp
 from .extract_references import extract_bp
 from .openalex_recommend import recommend_bp
+from .note import note_bp
 
 def register_routes(app):
     app.register_blueprint(upload_bp)
@@ -18,3 +19,4 @@ def register_routes(app):
     app.register_blueprint(openalex_bp)
     app.register_blueprint(extract_bp)
     app.register_blueprint(recommend_bp)
+    app.register_blueprint(note_bp)
