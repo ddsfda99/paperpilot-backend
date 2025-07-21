@@ -1,9 +1,7 @@
 import os
-from dotenv import load_dotenv
 
-load_dotenv()
 # ChatGLM 接口配置
-API_KEY = os.getenv("GLM_API_KEY", "")
+API_KEY = ""
 API_URL = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
 
 # 数据库配置：SQLite 文件路径

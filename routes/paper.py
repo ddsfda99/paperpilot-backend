@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_file
 from models import Paper, db
 import os
 
@@ -17,7 +17,7 @@ def get_all_papers():
 def delete_paper(paper_id):
     paper = Paper.query.get_or_404(paper_id)
 
-    # 删除PDF文件和封面图
+    # 删除PDF文件
     if paper.file_path and os.path.exists(paper.file_path):
         os.remove(paper.file_path)
 
@@ -25,3 +25,22 @@ def delete_paper(paper_id):
     db.session.commit()
     return jsonify({'message': f'已删除文献 {paper.title}'})
 
+# 下载 PDF 文件
+@paper_bp.route('/api/papers/<int:paper_id>/download', methods=['GET'])
+def download_paper(paper_id):
+    paper = Paper.query.get_or_404(paper_id)
+
+    # 拼接绝对路径
+    base_dir = os.path.dirname(os.path.abspath(__file__))  # 当前目录
+    file_path = os.path.join(base_dir, '..', paper.file_path.lstrip('/'))  # 注意移除开头斜杠
+
+    file_path = os.path.abspath(file_path)  # 处理完是绝对路径
+
+    if not os.path.exists(file_path):
+        return jsonify({'error': '文件不存在'}), 404
+
+    return send_file(
+        file_path,
+        as_attachment=True,
+        download_name=os.path.basename(file_path)
+    )

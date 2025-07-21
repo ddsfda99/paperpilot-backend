@@ -10,20 +10,24 @@ sys.path.append(os.path.dirname(__file__))
 UPLOAD_FOLDER = 'static/uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-def create_app():
+def create_app(testing=False):
     app = Flask(__name__, static_url_path='/static', static_folder='static')
-    app.config.from_pyfile('config.py')
+    
+    if testing:
+        app.config.update({
+            'TESTING': True,
+            'SQLALCHEMY_DATABASE_URI': 'sqlite:///:memory:',
+            'SQLALCHEMY_TRACK_MODIFICATIONS': False,
+            'SECRET_KEY': 'your-secret-key'
+        })
+    else:
+        app.config.from_pyfile('config.py')
 
     db.init_app(app)
-
-    # ✅ 正确配置跨域支持
     CORS(app, resources={r"/*": {"origins": "*"}})
-
     register_routes(app)
-
     with app.app_context():
         db.create_all()
-
     return app
 
 if __name__ == '__main__':

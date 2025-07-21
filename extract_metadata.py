@@ -1,10 +1,10 @@
-import fitz  # PyMuPDF
+import fitz 
 from pathlib import Path
 from keybert import KeyBERT
 from sentence_transformers import SentenceTransformer
 kw_model = KeyBERT(SentenceTransformer('all-MiniLM-L6-v2'))
 
-def extract_keywords_with_keybert(text: str, top_k=5) -> str:
+def extract_keywords_with_keybert(text: str, top_k=8) -> str:
     """使用 KeyBERT 从文本中提取关键词（轻量语义模型）"""
     keywords = kw_model.extract_keywords(
         text,

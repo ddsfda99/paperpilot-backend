@@ -3,11 +3,11 @@ from werkzeug.utils import secure_filename
 import os
 import fitz
 import logging
-
+import threading
 from models import Paper, db
 from context_cache import save_context
-from extract_metadata import extract_metadata  # ✅ 使用 PyMuPDF 提取器
-from routes.extract_references import extract_reference_texts  # ✅ 自动提取参考文献
+from extract_metadata import extract_metadata  
+from utils.build_index import build_faiss_index
 
 upload_bp = Blueprint('upload', __name__)
 logging.basicConfig(level=logging.DEBUG)
@@ -21,6 +21,12 @@ def extract_text_from_pdf(file_path):
             text += page.get_text()
     return text
 
+def async_build_index(filename, file_path):
+    try:
+        build_faiss_index(filename, file_path)
+        logging.info(f"[后台线程] 成功为 {filename} 构建段落索引")
+    except Exception as e:
+        logging.warning(f"[后台线程] 构建段落索引失败: {e}")
 
 @upload_bp.route('/api/upload', methods=['POST'])
 def upload_pdf():
@@ -34,27 +40,22 @@ def upload_pdf():
     os.makedirs(upload_folder, exist_ok=True)
     file_path = os.path.join(upload_folder, filename)
     file.save(file_path)
+    
+    # 构建段落索引（用于语义问答）
+    threading.Thread(target=async_build_index, args=(filename, file_path)).start()
 
     # 提取全文文本（用于上下文缓存）
     full_text = extract_text_from_pdf(file_path)
     save_context(filename, full_text)
 
-    # ✅ 提取元数据
+    # 提取元数据
     metadata = extract_metadata(file_path)
     title = metadata.get('title', 'Untitled')
     author = metadata.get('author', 'Unknown')
     tags = metadata.get('keywords', '')
-    logging.info(f"🧠 提取到关键词 tags: {tags}")
+    logging.info(f"提取到关键词 tags: {tags}")
 
     abstract = metadata.get('abstract', '')
-
-    # ✅ 提取参考文献
-    try:
-        references = extract_reference_texts(file_path)
-        logging.info(f"📚 成功提取 {len(references)} 条参考文献")
-    except Exception as e:
-        logging.warning(f"❌ 提取参考文献失败: {e}")
-        references = []
 
     # 检查是否已存在
     existing = Paper.query.filter_by(title=title, author=author).first()
@@ -63,7 +64,6 @@ def upload_pdf():
             'msg': '论文已存在，未重复上传',
             'url': f'http://localhost:5000{existing.file_path}',
             'file_id': os.path.basename(existing.file_path),
-            'references': references,
             'keyword': tags,
             'abstract': abstract
         }), 200
@@ -72,8 +72,7 @@ def upload_pdf():
         title=title,
         author=author,
         tags=tags,
-        file_path='/static/uploads/' + filename,
-        # abstract=abstract,  # 可添加字段
+        file_path='/static/uploads/' + filename
     )
     db.session.add(paper)
     db.session.commit()
@@ -82,7 +81,6 @@ def upload_pdf():
         'msg': '上传成功',
         'url': f'http://localhost:5000/static/uploads/{filename}',
         'file_id': filename,
-        'references': references, 
         'keyword': tags,          
         'abstract': abstract      
     }), 200
