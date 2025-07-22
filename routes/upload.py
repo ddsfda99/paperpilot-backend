@@ -49,13 +49,16 @@ def upload_pdf():
     save_context(filename, full_text)
 
     # 提取元数据
-    metadata = extract_metadata(file_path)
-    title = metadata.get('title', 'Untitled')
-    author = metadata.get('author', 'Unknown')
-    tags = metadata.get('keywords', '')
-    logging.info(f"提取到关键词 tags: {tags}")
-
-    abstract = metadata.get('abstract', '')
+    try:
+        metadata = extract_metadata(file_path)
+        title = metadata.get('title', 'Untitled')
+        author = metadata.get('author', 'Unknown')
+        tags = metadata.get('keywords', '')
+        abstract = metadata.get('abstract', '')
+        logging.info(f"提取到关键词 tags: {tags}")
+    except Exception as e:
+        logging.warning(f"❌ 提取元数据失败: {e}")
+        title, author, tags, abstract = 'Untitled', 'Unknown', '', ''
 
     # 检查是否已存在
     existing = Paper.query.filter_by(title=title, author=author).first()

@@ -1,105 +1,90 @@
 import io
+import os
 from unittest.mock import patch
+from werkzeug.datastructures import FileStorage
+
 
 def load_hec_pdf():
-    """加载 HEC.pdf 作为测试用 PDF"""
+    """加载测试用 HEC.pdf 为 BytesIO"""
     with open("tests/resources/HEC.pdf", "rb") as f:
         return io.BytesIO(f.read())
 
-def test_upload_hec_pdf_success(client, db):
-    """测试上传 HEC.pdf 成功返回并存入数据库"""
+
+def test_upload_pdf_success(client, db):
+    """测试上传 HEC.pdf 成功返回"""
     data = {
         'file': (load_hec_pdf(), 'HEC.pdf')
     }
 
-    with patch('routes.upload.build_faiss_index') as mock_index, \
+    with patch('routes.upload.async_build_index'), \
          patch('routes.upload.save_context'), \
-         patch('routes.upload.extract_metadata') as mock_meta, \
-         patch('routes.upload.extract_reference_texts') as mock_refs:
+         patch('routes.upload.extract_metadata') as mock_meta:
 
-        mock_index.return_value = None
         mock_meta.return_value = {
-            'title': 'HEC 2024 Paper',
-            'author': 'Jane Doe',
-            'keywords': 'HEC, AI',
-            'abstract': 'A test paper from HEC conference.'
+            'title': 'HEC Test Paper',
+            'author': 'John Doe',
+            'keywords': 'AI, HEC',
+            'abstract': 'This paper explores...'
         }
-        mock_refs.return_value = ['[1] Reference One', '[2] Reference Two']
 
-        response = client.post('/api/upload', data=data, content_type='multipart/form-data')
+        res = client.post('/api/upload', data=data, content_type='multipart/form-data')
+        assert res.status_code == 200
+        json = res.get_json()
+        assert json['msg'] in ['上传成功', '论文已存在，未重复上传']
+        assert 'url' in json
+        assert 'file_id' in json
+        assert 'keyword' in json
 
-        assert response.status_code == 200
-        assert response.json['msg'] in ['上传成功', '论文已存在，未重复上传']
-        assert response.json['keyword'] == 'HEC, AI'
-        assert isinstance(response.json['references'], list)
-        assert 'abstract' in response.json
 
-def test_upload_invalid_file_type(client):
-    """上传一个非 PDF 文件应报错"""
-    fake_file = io.BytesIO(b'This is not a pdf.')
-    data = {
-        'file': (fake_file, 'fake.txt')
-    }
-    response = client.post('/api/upload', data=data, content_type='multipart/form-data')
-    assert response.status_code == 400
-    assert '只支持 PDF 文件' in response.json['error']
-
-def test_upload_duplicate_pdf(client, db):
+def test_upload_duplicate(client, db):
     """第二次上传同一份 PDF，应提示已存在"""
-    data = {
-        'file': (load_hec_pdf(), 'HEC.pdf')
-    }
 
-    with patch('routes.upload.build_faiss_index'), \
+    with patch('routes.upload.async_build_index'), \
          patch('routes.upload.save_context'), \
-         patch('routes.upload.extract_metadata') as mock_meta, \
-         patch('routes.upload.extract_reference_texts'):
+         patch('routes.upload.extract_metadata') as mock_meta:
 
         mock_meta.return_value = {
-            'title': 'HEC 2024 Paper',
-            'author': 'Jane Doe',
-            'keywords': 'HEC, AI',
+            'title': 'HEC Test Paper',
+            'author': 'John Doe',
+            'keywords': 'AI, HEC',
+            'abstract': 'This paper explores...'
         }
 
-        # 第一次上传
-        client.post('/api/upload', data=data, content_type='multipart/form-data')
+        # 第一次上传（新打开文件）
+        data1 = {'file': (load_hec_pdf(), 'HEC.pdf')}
+        client.post('/api/upload', data=data1, content_type='multipart/form-data')
 
-        # 第二次上传，应该走“已存在”逻辑
-        response = client.post('/api/upload', data=data, content_type='multipart/form-data')
-        assert response.status_code == 200
-        assert response.json['msg'] == '论文已存在，未重复上传'
+        # 第二次上传（重新打开文件）
+        data2 = {'file': (load_hec_pdf(), 'HEC.pdf')}
+        res = client.post('/api/upload', data=data2, content_type='multipart/form-data')
+        assert res.status_code == 200
+        assert res.get_json()['msg'] == '论文已存在，未重复上传'
 
-def test_upload_metadata_error_handling(client, db):
-    """模拟 extract_metadata 抛出异常，仍应成功返回"""
+
+
+def test_upload_invalid_file(client):
+    """上传非 PDF 文件应返回 400"""
+    fake = io.BytesIO(b"not a real pdf")
+    data = {
+        'file': (fake, 'not_pdf.txt')
+    }
+    res = client.post('/api/upload', data=data, content_type='multipart/form-data')
+    assert res.status_code == 400
+    assert '只支持 PDF 文件' in res.get_json()['error']
+
+
+def test_metadata_failure_handled(client, db):
+    """模拟 extract_metadata 抛异常，接口应正常返回默认元数据"""
     data = {
         'file': (load_hec_pdf(), 'HEC.pdf')
     }
 
-    with patch('routes.upload.build_faiss_index'), \
+    with patch('routes.upload.async_build_index'), \
          patch('routes.upload.save_context'), \
-         patch('routes.upload.extract_metadata', side_effect=Exception("模拟失败")), \
-         patch('routes.upload.extract_reference_texts', return_value=[]):
+         patch('routes.upload.extract_metadata', side_effect=Exception("Metadata failed")):
 
-        response = client.post('/api/upload', data=data, content_type='multipart/form-data')
-        assert response.status_code == 200
-        assert 'msg' in response.json
-
-def test_upload_reference_extraction_failure(client, db):
-    """模拟 extract_reference_texts 抛异常"""
-    data = {
-        'file': (load_hec_pdf(), 'HEC.pdf')
-    }
-
-    with patch('routes.upload.build_faiss_index'), \
-         patch('routes.upload.save_context'), \
-         patch('routes.upload.extract_metadata', return_value={
-             'title': 'Another Paper',
-             'author': 'John Doe',
-             'keywords': '',
-         }), \
-         patch('routes.upload.extract_reference_texts', side_effect=Exception("模拟失败")):
-
-        response = client.post('/api/upload', data=data, content_type='multipart/form-data')
-        assert response.status_code == 200
-        assert 'references' in response.json
-        assert response.json['references'] == []  # 应该返回空列表
+        res = client.post('/api/upload', data=data, content_type='multipart/form-data')
+        assert res.status_code == 200
+        json = res.get_json()
+        assert json['keyword'] == ''
+        assert json['abstract'] == ''

@@ -87,7 +87,7 @@ def extract_title_author_by_font(pdf_path):
 def extract_keywords(text, topk=5):
     vectorizer = TfidfVectorizer(stop_words='english', max_features=topk)
     X = vectorizer.fit_transform([text])
-    return vectorizer.get_feature_names_out()
+    return vectorizer.get_feature_names_out().tolist()
 
 # 3. 综合封装接口
 def extract_paper_metadata(pdf_path):
